@@ -1,6 +1,7 @@
 package com.ayushch.streamforge.upload.service;
 
 import io.minio.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -11,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+@Slf4j
 @Service
 public class StorageService {
     private final MinioClient minioClient;
@@ -45,11 +47,11 @@ public class StorageService {
     public void uploadChunk(String uploadId, String chunkIndex, InputStream inputStream, long chunkSize, String contentType) {
         try {
             String objectName = uploadId + "/chunk-" + chunkIndex;
-            boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(mediaBucket).build());
+            boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(chunkBucket).build());
             if (!found) {
-                minioClient.makeBucket(MakeBucketArgs.builder().bucket(mediaBucket).build());
+                minioClient.makeBucket(MakeBucketArgs.builder().bucket(chunkBucket).build());
             }
-            minioClient.putObject(PutObjectArgs.builder().bucket(mediaBucket)
+            minioClient.putObject(PutObjectArgs.builder().bucket(chunkBucket)
                     .object(objectName).stream(
                             inputStream, chunkSize, -1
                     ).contentType(contentType).build());
