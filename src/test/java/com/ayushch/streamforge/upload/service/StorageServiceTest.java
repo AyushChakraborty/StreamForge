@@ -37,6 +37,7 @@ public class StorageServiceTest {
 
     private boolean checkFileExistsInMinio(String bucket, String objectName) {
         try {
+            //makes a HEAD request, basically a req for the metadata of the object
             minioClient.statObject(StatObjectArgs.builder()
                     .bucket(bucket)
                     .object(objectName)

@@ -1,4 +1,10 @@
 package com.ayushch.streamforge.upload.model.dto;
 
-public class UploadCompleteRequest {
-}
+import jakarta.validation.constraints.NotNull;
+
+import java.util.UUID;
+
+public record UploadCompleteRequest (
+        @NotNull
+        UUID uploadId
+) {}
