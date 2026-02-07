@@ -8,5 +8,7 @@ public record InitiateUploadRequest (
         @Positive(message = "File size must be positive")
         long fileSize,
 
+        int totalChunks,
+
         String contentType
 ) {}

@@ -32,6 +32,8 @@ public class UploadSession {
 
     private long fileSize;
 
+    private int totalChunks;
+
     public enum UploadStatus {
         PENDING, COMPLETED, FAILED
     }

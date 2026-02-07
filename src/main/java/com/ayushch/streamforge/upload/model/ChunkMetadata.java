@@ -9,7 +9,9 @@ import lombok.NoArgsConstructor;
 import java.util.UUID;
 
 @Entity
-@Table(name = "chunk_metadata")
+@Table(name = "chunk_metadata", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"session_id", "chunk_index"})
+}) //ensures that no duplicate chunks are stored if sent over the network
 @Data
 @Builder
 @NoArgsConstructor

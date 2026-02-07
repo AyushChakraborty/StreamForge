@@ -1,13 +1,18 @@
 package com.ayushch.streamforge.upload.service;
 
+import com.ayushch.streamforge.upload.model.ChunkMetadata;
 import com.ayushch.streamforge.upload.model.UploadSession;
-import com.ayushch.streamforge.upload.model.dto.InitiateUploadRequest;
-import com.ayushch.streamforge.upload.model.dto.InitiateUploadResponse;
+import com.ayushch.streamforge.upload.model.dto.*;
+import com.ayushch.streamforge.upload.repository.ChunkMetadataRepository;
 import com.ayushch.streamforge.upload.repository.UploadSessionRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -15,22 +20,25 @@ import org.springframework.stereotype.Service;
 public class UploadSessionService {
 
     private final UploadSessionRepository sessionRepository;
+    private final ChunkMetadataRepository chunkMetadataRepository;
+    private final StorageService storageService;
 
     @Transactional
     public InitiateUploadResponse initiateUpload(InitiateUploadRequest request) {
-        //this method takes in the file metadata in the form of
-        //InitiateUploadRequest DTO, and creates the UploadSession entity
-        //based on it, and saves it to the psql db
         log.info("Initiating upload for file: {}", request.fileName());
 
+        //preparing the record to be inserted
         UploadSession session = UploadSession.builder()
                 .filename(request.fileName())
                 .contentType(request.contentType())
                 .fileSize(request.fileSize())
+                .totalChunks(request.totalChunks())
                 .status(UploadSession.UploadStatus.PENDING)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
-        //save to psql db
+        //insert row into existing 'upload_sessions' table
         UploadSession savedSession = sessionRepository.save(session);
 
         log.info("Upload session created with ID: {}", session.getId());
@@ -45,4 +53,118 @@ public class UploadSessionService {
         );
     }
 
+    @Transactional
+    public ChunkUploadResponse uploadChunk(ChunkUploadRequest request) {
+        log.info("Initiating chunk upload for uploadId: {} with chunkIndex: {}", request.uploadId(), request.chunkIndex());
+
+        UploadSession session = sessionRepository.findById(request.uploadId())
+                .orElseThrow(() -> new RuntimeException("Session not found"));
+
+        String etag = storageService.uploadChunk(
+                request.uploadId(),
+                request.chunkIndex(),
+                request.inputStream(),
+                request.chunkSize(),
+                session.getContentType()
+        );
+
+        if (etag.isEmpty()) {
+            return new ChunkUploadResponse(
+                    request.uploadId(),
+                    request.chunkIndex(),
+                    false,
+                    "Re-upload the chunk"
+            );
+        }
+
+        //add record of this chunk
+        ChunkMetadata metadata = ChunkMetadata.builder()
+                .session(session)
+                .chunkIndex(request.chunkIndex())
+                .size(request.chunkSize())
+                .etag(etag)
+                .build();
+
+        session.getChunks().add(metadata);
+        session.setUpdatedAt(LocalDateTime.now());
+        sessionRepository.save(session);
+
+        return new ChunkUploadResponse(
+                request.uploadId(),
+                request.chunkIndex(),
+                true,
+                "Chunk uploaded successfully"
+        );
+    }
+
+    private boolean areAllChunksPresent(UploadSession session) {
+        //extract all unique indices in a set (unique constraint already present in chunk_metadata
+        //but just to be sure)
+        if (session.getChunks() == null || session.getChunks().isEmpty()) {
+            return false;
+        }
+        Set<Integer> uploadedIndices = session.getChunks().stream()
+                .map(ChunkMetadata::getChunkIndex)
+                .collect(Collectors.toSet());
+
+        if (uploadedIndices.size() != session.getTotalChunks()) {
+            return false;
+        }
+
+        for (int i = 0; i < session.getTotalChunks(); i++) {
+            if (!uploadedIndices.contains(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public UploadCompleteResponse checkCompletion(UploadCompleteRequest request) {
+        UploadSession session = sessionRepository.findById(request.uploadId())
+                .orElseThrow(() -> new RuntimeException("Session not found"));
+
+        //validate if all the chunks are present
+        if (!areAllChunksPresent(session)) {
+            return new UploadCompleteResponse(
+                    session.getId(),
+                    false,
+                    "Upload incomplete: Missing chunks"
+            );
+        }
+
+        try {
+            boolean assembled = storageService.assembleChunks(
+                    session.getId(),
+                    session.getTotalChunks(),
+                    session.getFilename(),
+                    session.getContentType()
+            );
+
+            if (!assembled) {
+                return new UploadCompleteResponse(
+                        session.getId(),
+                        false,
+                        "File assembly failed. Please retry completion"
+                );
+            }
+
+            session.setStatus(UploadSession.UploadStatus.COMPLETED);
+            session.setUpdatedAt(LocalDateTime.now());
+            sessionRepository.save(session);
+
+            return new UploadCompleteResponse(
+                    session.getId(),
+                    true,
+                    "Upload completed and file assembled successfully"
+            );
+
+        }catch (Exception e) {
+            log.error("Failed to assemble file for session {}", session.getId(), e);
+            return new UploadCompleteResponse(
+                    session.getId(),
+                    false,
+                    "Upload incomplete"
+            );
+        }
+    }
 }

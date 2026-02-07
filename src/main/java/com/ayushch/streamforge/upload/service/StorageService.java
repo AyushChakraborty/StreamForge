@@ -11,6 +11,7 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -28,14 +29,14 @@ public class StorageService {
         this.minioClient = minioClient;
     }
 
-    public void uploadFile(String objectName, InputStream inputStream, long fileSize, String contentType) {
+    public void uploadFile(UUID objectName, InputStream inputStream, long fileSize, String contentType) {
         try {
             boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(mediaBucket).build());
             if (!found) {
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(mediaBucket).build());
             }
             minioClient.putObject(PutObjectArgs.builder().bucket(mediaBucket)
-                    .object(objectName).stream(
+                    .object(objectName.toString()).stream(
                             inputStream, fileSize, -1
                     ).contentType(contentType).build());
 
@@ -44,23 +45,25 @@ public class StorageService {
         }
     }
 
-    public void uploadChunk(String uploadId, String chunkIndex, InputStream inputStream, long chunkSize, String contentType) {
+    public String uploadChunk(UUID uploadId, int chunkIndex, InputStream inputStream, long chunkSize, String contentType) {
         try {
-            String objectName = uploadId + "/chunk-" + chunkIndex;
+            String objectName = uploadId.toString() + "/chunk-" + chunkIndex;
             boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(chunkBucket).build());
             if (!found) {
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(chunkBucket).build());
             }
-            minioClient.putObject(PutObjectArgs.builder().bucket(chunkBucket)
+            ObjectWriteResponse response = minioClient.putObject(PutObjectArgs.builder().bucket(chunkBucket)
                     .object(objectName).stream(
                             inputStream, chunkSize, -1
                     ).contentType(contentType).build());
+            return response.etag();
         }catch (Exception e) {
-            throw new RuntimeException("Failed to upload chunk: " + e.getMessage());
+            log.error("MinIO upload failed for ID: {} Chunk: {}", uploadId, chunkIndex, e);
+            return "";
         }
     }
 
-    public void assembleChunks(String uploadId, int totalChunks, String fileName, String contentType) throws IOException {
+    public boolean assembleChunks(UUID uploadId, int totalChunks, String fileName, String contentType) throws IOException {
         Path tempFile = null;
         try {
             tempFile = Files.createTempFile("upload-", "-" + uploadId);
@@ -85,9 +88,9 @@ public class StorageService {
             }
 
             deleteChunks(uploadId, totalChunks);
-
+            return true;
         }catch (Exception e) {
-            throw new RuntimeException("Failed to assemble chunks: " + e.getMessage());
+            return false;
         }finally {
             if (tempFile != null) {
                 Files.deleteIfExists(tempFile);
@@ -95,18 +98,18 @@ public class StorageService {
         }
     }
 
-    private InputStream getChunk(String uploadId, int chunkIndex) throws Exception{
-        String objectName = uploadId + "/chunk-" + chunkIndex;
+    private InputStream getChunk(UUID uploadId, int chunkIndex) throws Exception{
+        String objectName = uploadId.toString() + "/chunk-" + chunkIndex;
 
         return minioClient.getObject(
                 GetObjectArgs.builder().bucket(chunkBucket).object(objectName).build()
         );
     }
 
-    public void deleteChunks(String uploadId, int totalChunks) {
+    public void deleteChunks(UUID uploadId, int totalChunks) {
         try {
             for (int i=0; i<totalChunks; i++) {
-                String objectName = uploadId + "/chunk-" + i;
+                String objectName = uploadId.toString() + "/chunk-" + i;
 
                 minioClient.removeObject(RemoveObjectArgs.builder()
                                 .bucket(chunkBucket)
