@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --font-mono: var(--font-departure), monospace;
+
+  --font-sans: var(--font-departure), monospace;
+
+  --color-retro-bg: #E6E6E6;
+  --color-retro-dark: #1A1A1A;
+  --color-retro-green: #8FBC8F;
+  --color-retro-gray: #B0B0B0;
+}
+
+body {
+  background-color: var(--color-retro-bg);
+  color: var(--color-retro-dark);
+  
+  font-family: var(--font-departure), monospace; 
+  
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+}
