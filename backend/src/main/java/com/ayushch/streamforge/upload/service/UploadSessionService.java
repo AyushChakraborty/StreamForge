@@ -1,5 +1,7 @@
 package com.ayushch.streamforge.upload.service;
 
+import com.ayushch.streamforge.upload.events.MediaEventProducer;
+import com.ayushch.streamforge.upload.events.MediaUploaderEvent;
 import com.ayushch.streamforge.upload.model.ChunkMetadata;
 import com.ayushch.streamforge.upload.model.UploadSession;
 import com.ayushch.streamforge.upload.model.dto.*;
@@ -22,6 +24,7 @@ public class UploadSessionService {
     private final UploadSessionRepository sessionRepository;
     private final ChunkMetadataRepository chunkMetadataRepository;
     private final StorageService storageService;
+    private final MediaEventProducer mediaEventProducer;
 
     @Transactional
     public InitiateUploadResponse initiateUpload(InitiateUploadRequest request) {
@@ -37,7 +40,7 @@ public class UploadSessionService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-
+        log.info("created record, time to insert it now");
         //insert row into existing 'upload_sessions' table
         UploadSession savedSession = sessionRepository.save(session);
 
@@ -153,6 +156,13 @@ public class UploadSessionService {
             session.setStatus(UploadSession.UploadStatus.COMPLETED);
             session.setUpdatedAt(LocalDateTime.now());
             sessionRepository.save(session);
+
+            //once saved to psql db, push the uploadId to media-uploads topic to be
+            //pulled by the processor to make and save its thumbnail to the object store
+            MediaUploaderEvent event = new MediaUploaderEvent(
+                session.getId()
+            );
+            mediaEventProducer.sendMediaUploaderEvent(event);
 
             return new UploadCompleteResponse(
                     session.getId(),

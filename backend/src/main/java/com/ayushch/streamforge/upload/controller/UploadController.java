@@ -34,7 +34,8 @@ public class UploadController {
             @RequestParam("chunkIndex") int chunkIndex,
             @RequestParam("file") MultipartFile file
             ) throws IOException {
-
+        
+        log.info("RIGHT INSIDE CHUNK CONTROLLER METHOD");
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(new ChunkUploadResponse(uploadId, chunkIndex, false, "File chunk is empty"));
         }

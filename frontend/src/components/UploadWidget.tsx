@@ -38,6 +38,7 @@ export default function UploadWidget() {
         try {
             //initiate the upload first
             const total_chunks = Math.ceil(file.size / CHUNK_SIZE);
+            console.log(`number of chunks: ${total_chunks}`);
             const initPayload: InitiateUploadRequest = {
                 fileName: file.name,
                 fileSize: file.size,
@@ -51,7 +52,9 @@ export default function UploadWidget() {
             );      
             
             //since there is no UUID type in ts, its handled as a string here
-            setUploadId(initResponse.uploadId);
+            const currentUploadId = initResponse.uploadId;
+            setUploadId(currentUploadId);
+            console.log(`upload id is set: ${currentUploadId}`);
             
             //for now using a simple blocking loop, later plan is for a sliding windowed version
             for (let i = 0; i < total_chunks; i++) {
@@ -60,9 +63,11 @@ export default function UploadWidget() {
                 const chunk = file.slice(start, end); 
 
                 const formData = new FormData();
-                formData.append('uploadId', uploadId);
+                formData.append('uploadId', initResponse.uploadId);
                 formData.append('chunkIndex', i.toString());
                 formData.append('file', chunk);
+                
+                console.log(`ok got till here, chunk is made, its size is: ${formData}`)
                 
                 const {data : chunkUploadResponse} = await axios.post<ChunkUploadResponse>(
                     `${API_BASE}/chunk`,
@@ -79,7 +84,7 @@ export default function UploadWidget() {
             //since upload is completed, hit the /complete server endpoint to stitch
             //the chunks
             const completePayload: UploadCompleteRequest = {
-                uploadId: uploadId,
+                uploadId: currentUploadId,
             };
 
             const {data : completeResponse} = await axios.post<UploadCompleteResponse>(
@@ -89,7 +94,7 @@ export default function UploadWidget() {
 
             setStatus('COMPLETED');
         }catch (e) {
-            console.log(e);
+            console.log(`$error: ${e}`);
             setStatus('ERROR');
         }
     };
