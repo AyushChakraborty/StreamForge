@@ -17,6 +17,6 @@ public class MediaEventProducer {
 
     public void sendMediaUploaderEvent(MediaUploaderEvent event) {
         kafkaTemplate.send("media-uploads", event);
-        log.info("[kafka-topic]: message sent to topic. UploadId: ", event.uploadId());
+        log.info("[kafka-topic]: message sent to topic. UploadId: ", event.fileId());
     }
 }

@@ -159,8 +159,14 @@ public class UploadSessionService {
 
             //once saved to psql db, push the uploadId to media-uploads topic to be
             //pulled by the processor to make and save its thumbnail to the object store
+
+            //start of producer logic for thumbnail generation
+            String minioObjectKey = session.getId().toString() + "/" + session.getFilename();
+
             MediaUploaderEvent event = new MediaUploaderEvent(
-                session.getId()
+                session.getId(),
+                minioObjectKey,
+                session.getContentType()
             );
             mediaEventProducer.sendMediaUploaderEvent(event);
 
@@ -169,6 +175,7 @@ public class UploadSessionService {
                     true,
                     "Upload completed and file assembled successfully"
             );
+            //end of producer logic here
 
         }catch (Exception e) {
             log.info("Failed to assemble file for session {}", session.getId(), e);

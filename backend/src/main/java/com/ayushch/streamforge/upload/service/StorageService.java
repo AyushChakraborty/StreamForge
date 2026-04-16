@@ -37,7 +37,7 @@ public class StorageService {
             }
             minioClient.putObject(PutObjectArgs.builder().bucket(mediaBucket)
                     .object(objectName.toString()).stream(
-                            inputStream, fileSize, -1
+                            inputStream, fileSize, -1L
                     ).contentType(contentType).build());
 
         }catch (Exception e) {
@@ -54,7 +54,7 @@ public class StorageService {
             }
             ObjectWriteResponse response = minioClient.putObject(PutObjectArgs.builder().bucket(chunkBucket)
                     .object(objectName).stream(
-                            inputStream, chunkSize, -1
+                            inputStream, chunkSize, -1L
                     ).contentType(contentType).build());
             return response.etag();
         }catch (Exception e) {
@@ -83,8 +83,8 @@ public class StorageService {
 
                 minioClient.putObject(PutObjectArgs.builder()
                                 .bucket(mediaBucket)
-                                .object(fileName)
-                                .stream(fileStream, fileSize, -1)
+                                .object(uploadId.toString() + '/' + fileName)
+                                .stream(fileStream, fileSize, -1L)
                                 .contentType(contentType)
                         .build());
                 log.info("inside assembly service: assembled file put!");

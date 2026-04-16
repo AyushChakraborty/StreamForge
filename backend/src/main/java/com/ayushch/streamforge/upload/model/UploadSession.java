@@ -51,4 +51,7 @@ public class UploadSession {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    @Column(name = "thumbnail_path")
+    private String thumbnailPath;
 }
